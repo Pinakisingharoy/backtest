@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, BigInteger, Index, Text, Enum
+from sqlalchemy import Column, Integer, String, Float, DateTime, BigInteger, Index, Enum
 from sqlalchemy.sql import func
 from app.database import Base
 import enum
@@ -9,7 +9,7 @@ class TradeStatus(enum.Enum):
 
 class MarketData(Base):
     __tablename__ = "backtest_data"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String(50))
     exchange = Column(String(20))
@@ -19,15 +19,13 @@ class MarketData(Base):
     ltp = Column(Float)
     volume = Column(BigInteger)
     open_interest = Column(BigInteger)
-    bid_ask = Column(BigInteger)
-    timestamp = Column(DateTime(timezone=True), server_default=func.now())
-    date = Column(DateTime(timezone=True))
-    
-    __table_args__ = (Index('idx_symbol_date', 'trading_symbol', 'date'),)
+    bid_price = Column(Float)
+
+    __table_args__ = (Index('idx_symbol', 'trading_symbol'),)
 
 class Trade(Base):
     __tablename__ = "trades"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     trade_id = Column(String(50), unique=True, index=True)
     symbol = Column(String(50), index=True)
@@ -39,5 +37,6 @@ class Trade(Base):
     exit_time = Column(DateTime(timezone=True), nullable=True)
     exit_price = Column(Float, nullable=True)
     profit_loss = Column(Float, nullable=True)
+    exit_reason = Column(String(50), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

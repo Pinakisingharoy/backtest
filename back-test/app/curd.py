@@ -21,14 +21,15 @@ def get_symbol_highs(db: Session, limit: int = 10):
             SELECT 
                 trading_symbol,
                 ltp as high_price,
-                date,
+                id as row_id,
                 ROW_NUMBER() OVER (PARTITION BY trading_symbol ORDER BY ltp DESC) as rank
             FROM backtest_data
             WHERE ltp IS NOT NULL 
             AND trading_symbol IS NOT NULL
             AND trading_symbol != ''
         )
-        SELECT * FROM ranked_prices 
+        SELECT trading_symbol, high_price, row_id, rank
+        FROM ranked_prices 
         WHERE rank <= :limit
         ORDER BY trading_symbol, rank
     """)
@@ -38,30 +39,22 @@ def get_symbol_highs(db: Session, limit: int = 10):
         {
             "trading_symbol": row[0],
             "high_price": row[1],
-            "date": row[2],
+            "row_id": row[2],
             "rank": row[3]
         }
         for row in rows
     ]
 
 def get_daily_summary(db: Session, date: Optional[datetime] = None) -> Dict[str, Any]:
-    if not date:
-        date = datetime.now()
-    start = date.replace(hour=0, minute=0, second=0, microsecond=0)
-    end = date.replace(hour=23, minute=59, second=59, microsecond=999999)
-    data = db.query(MarketData).filter(
-        MarketData.date >= start,
-        MarketData.date <= end
-    ).all()
+    data = db.query(MarketData).all()
     if not data:
-        return {"message": "No data for this date"}
+        return {"message": "No data available"}
     df = pd.DataFrame([{
         'symbol': d.trading_symbol,
         'ltp': d.ltp or 0,
         'volume': d.volume or 0
     } for d in data])
     return {
-        "date": date.isoformat(),
         "total_symbols": len(df['symbol'].unique()),
         "total_volume": int(df['volume'].sum()),
         "avg_price": float(df['ltp'].mean()) if not df.empty else 0,

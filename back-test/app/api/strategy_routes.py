@@ -4,7 +4,7 @@ from typing import Optional
 
 from app.database import get_db
 from app import schemas, models
-from app.services.strategy_service import StrategyService
+from app.services.backtest_service import BacktestService
 
 router = APIRouter()
 
@@ -14,14 +14,42 @@ def run_strategy(
     db: Session = Depends(get_db)
 ):
     try:
-        service = StrategyService(db)
-        result = service.run_strategy(request)
+        backtest_req = schemas.BacktestRequest(
+            symbol=request.symbol,
+            lookback=request.lookback,
+            quantity=request.quantity,
+            strategy_name=request.strategy_name
+        )
+        service = BacktestService(db)
+        result = service.run_backtest(backtest_req)
         trades_response = [schemas.TradeResponse.model_validate(t) for t in result['trades']]
         return schemas.StrategyRunResponse(
-            message="Strategy executed successfully",
-            trades_generated=result['trades_generated'],
+            message=f"Strategy executed. Generated {len(trades_response)} trades.",
+            trades_generated=len(trades_response),
             trades=trades_response
         )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/backtest", response_model=schemas.BacktestResponse)
+def run_backtest(
+    request: schemas.BacktestRequest,
+    db: Session = Depends(get_db)
+):
+    try:
+        service = BacktestService(db)
+        result = service.run_backtest(request)
+        trades_response = [schemas.TradeResponse.model_validate(t) for t in result['trades']]
+        stats = schemas.BacktestStats(**result['stats'])
+        return schemas.BacktestResponse(
+            message="Backtest completed",
+            trades=trades_response,
+            stats=stats
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

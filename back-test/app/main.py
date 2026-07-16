@@ -5,7 +5,7 @@ from app.config import config
 from app.database import engine
 from app import models
 
-# Create database tables
+# Create tables if they don't exist
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(

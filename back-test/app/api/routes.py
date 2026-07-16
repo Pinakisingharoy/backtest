@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import Optional   # <-- add this line
+from typing import Optional
 import pandas as pd
 import io
 from datetime import datetime
@@ -16,6 +16,7 @@ from app.crud import (
 )
 from app.api import strategy_routes
 from app.services.data_processor import DataProcessor
+from app.services.backtest_service import BacktestService
 from app.config import config
 
 logging.basicConfig(level=logging.INFO)
@@ -78,7 +79,7 @@ def export_top_highs_csv(db: Session = Depends(get_db)):
             data.append({
                 "Symbol": row["trading_symbol"],
                 "High Price": row["high_price"],
-                "Date": row["date"],
+                "Row ID": row.get("row_id", ""),
                 "Rank": row["rank"]
             })
         df = pd.DataFrame(data)
@@ -104,3 +105,37 @@ def get_daily_summary(
     except Exception as e:
         logger.error(f"Analytics error: {str(e)}")
         raise HTTPException(500, str(e))
+
+# --- Debug endpoints ---
+@router.get("/debug/symbols")
+def debug_symbols(db: Session = Depends(get_db)):
+    symbols = db.query(models.MarketData.trading_symbol).distinct().all()
+    raw = [s[0] for s in symbols if s[0]]
+    return {
+        "count": len(raw),
+        "symbols": raw,
+        "first_10": raw[:10]
+    }
+
+@router.get("/debug/data")
+def debug_data(db: Session = Depends(get_db)):
+    symbols = db.query(models.MarketData.trading_symbol).distinct().all()
+    symbols_list = [s[0] for s in symbols if s[0]]
+    result = {}
+    for sym in symbols_list[:5]:
+        candles = db.query(models.MarketData).filter(
+            models.MarketData.trading_symbol == sym
+        ).order_by(models.MarketData.id).limit(20).all()
+        ltp_values = [c.ltp for c in candles if c.ltp is not None]
+        result[sym] = {
+            "count": len(candles),
+            "ltp_sample": ltp_values[:10] if ltp_values else [],
+            "min_ltp": min(ltp_values) if ltp_values else None,
+            "max_ltp": max(ltp_values) if ltp_values else None,
+            "has_null_ltp": any(c.ltp is None for c in candles),
+        }
+    return {
+        "total_symbols": len(symbols_list),
+        "symbols_shown": symbols_list[:10],
+        "sample_data": result
+    }

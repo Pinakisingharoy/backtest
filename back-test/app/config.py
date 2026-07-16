@@ -16,5 +16,4 @@ class Config:
     BASE_DIR = Path(__file__).resolve().parent
     OUTPUT_DATA_DIR = BASE_DIR / "exports"
 
-# Create the config instance
 config = Config()

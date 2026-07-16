@@ -21,13 +21,13 @@ class StrategyService:
         query = self.db.query(models.MarketData).filter(
             models.MarketData.trading_symbol == symbol
         )
-        if start_date:
-            query = query.filter(models.MarketData.date >= start_date)
-        if end_date:
-            query = query.filter(models.MarketData.date <= end_date)
-        candles = query.order_by(models.MarketData.date).all()
+        # NOTE: Since there is no date column, we cannot filter by date.
+        # We'll ignore start_date and end_date for now.
+        # Instead, we order by id (assuming chronological insertion).
+        candles = query.order_by(models.MarketData.id).all()   # <-- order by id
 
         if len(candles) < lookback + 1:
+            logger.info(f"Not enough candles for {symbol} (need {lookback+1}, got {len(candles)})")
             return trades
 
         for i in range(lookback, len(candles)):
@@ -35,13 +35,13 @@ class StrategyService:
             prev_candles = candles[i - lookback:i]
             highest_prev = max(c.ltp for c in prev_candles)
             if current.ltp > highest_prev:
-                trade_id = f"{strategy_name}_{symbol}_{current.date.strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
+                trade_id = f"{strategy_name}_{symbol}_{i}_{uuid.uuid4().hex[:6]}"
                 trade = TradeCreate(
                     symbol=symbol,
                     entry_price=current.ltp,
                     quantity=quantity,
                     strategy_name=strategy_name,
-                    entry_time=current.date,
+                    entry_time=datetime.now(),   # no entry_time from data, use current time
                     trade_id=trade_id
                 )
                 trades.append(trade)
@@ -73,6 +73,9 @@ class StrategyService:
         else:
             symbols = self.db.query(models.MarketData.trading_symbol).distinct().all()
             symbols_to_run = [s[0] for s in symbols if s[0]]
+
+        if not symbols_to_run:
+            return {'trades_generated': 0, 'trades': []}
 
         all_trades = []
         for sym in symbols_to_run:
